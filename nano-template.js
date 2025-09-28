@@ -1,18 +1,21 @@
 class NanoTemplate {
-  static async render(template, apiUrl = null, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html') {
+  static async render(template, dataSource = null, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html') {
     const targetElement = document.getElementById(targetElementId);
     const templateUrl = template.startsWith('http') ? template : viewPath + template.replace('.', '/') + templateExtension;
     try {
-      if (! apiUrl) {
-        const content = await fetch(templateUrl);
-        const html = await content.text();
-        targetElement.innerHTML = html;
+      const content = await fetch(templateUrl);
+      const template = await content.text();
+      if (! dataSource) {
+        targetElement.innerHTML = template;
         return;
       }
-      const [template, data] = await Promise.all([
-        fetch(templateUrl).then(res => res.text()),
-        fetch(apiUrl).then(res => res.json())
-      ]);
+      let data;
+      if (typeof dataSource === 'string') {
+        const apiData = await fetch(dataSource);
+        data = await apiData.json();
+      } else {
+        data = dataSource;
+      }
       const processed = this.processTemplate(template, data);
       targetElement.innerHTML = processed;
     } catch (error) {
