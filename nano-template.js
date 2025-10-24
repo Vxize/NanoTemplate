@@ -7,6 +7,7 @@ class NanoTemplate {
       const template = await content.text();
       if (! dataSource) {
         targetElement.innerHTML = template;
+        await this.loadScript(targetElement);
         return;
       }
       let data;
@@ -18,10 +19,39 @@ class NanoTemplate {
       }
       const processed = this.processTemplate(template, data);
       targetElement.innerHTML = processed;
+      await this.loadScript(targetElement);
     } catch (error) {
       console.error('Template rendering failed:', error);
       targetElement.innerHTML = `<p>Error loading content. ${error.message}</p>`;
     }
+  }
+
+  static async loadScript(targetElement) {
+    const scripts = targetElement.querySelectorAll('script');
+    for (const oldScript of scripts) {
+      await this.executeScript(oldScript);
+    }
+  }
+
+  static executeScript(oldScript) {
+    return new Promise((resolve, reject) => {
+      const newScript = document.createElement('script');
+      Array.from(oldScript.attributes).forEach(attr => {
+        newScript.setAttribute(attr.name, attr.value);
+      });
+      if (oldScript.src) {
+        // External script
+        newScript.src = oldScript.src;
+        newScript.onload = resolve;
+        newScript.onerror = reject;
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+      } else {
+        // Inline script
+        newScript.textContent = oldScript.textContent;
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+        resolve(); // Executes synchronously, so we can resolve immediately
+      }
+    });
   }
 
   static processTemplate(template, data) {
