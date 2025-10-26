@@ -1,5 +1,5 @@
 class NanoTemplate {
-  static async render(template, dataSource = null, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html') {
+  static async render(template, dataSource = null, fetchOption = {}, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html') {
     const targetElement = document.getElementById(targetElementId);
     const templateUrl = template.startsWith('http') ? template : viewPath + template.replace('.', '/') + templateExtension;
     try {
@@ -12,7 +12,10 @@ class NanoTemplate {
       }
       let data;
       if (typeof dataSource === 'string') {
-        const apiData = await fetch(dataSource);
+        const apiData = await fetch(dataSource, fetchOption);
+        if (! apiData.ok) {
+          throw new Error("Error loading data");
+        }
         data = await apiData.json();
       } else {
         data = dataSource;
@@ -22,7 +25,7 @@ class NanoTemplate {
       await this.loadScript(targetElement);
     } catch (error) {
       console.error('Template rendering failed:', error);
-      targetElement.innerHTML = `<p>Error loading content. ${error.message}</p>`;
+      targetElement.innerHTML = `<p>Error loading content: ${error.message}</p>`;
     }
   }
 
@@ -34,24 +37,26 @@ class NanoTemplate {
   }
 
   static executeScript(oldScript) {
-    return new Promise((resolve, reject) => {
-      const newScript = document.createElement('script');
-      Array.from(oldScript.attributes).forEach(attr => {
-        newScript.setAttribute(attr.name, attr.value);
+    if (oldScript) {
+      return new Promise((resolve, reject) => {
+        const newScript = document.createElement('script');
+        Array.from(oldScript.attributes).forEach(attr => {
+          newScript.setAttribute(attr.name, attr.value);
+        });
+        if (oldScript.src) {
+          // External script
+          newScript.src = oldScript.src;
+          newScript.onload = resolve;
+          newScript.onerror = reject;
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+        } else {
+          // Inline script
+          newScript.textContent = oldScript.textContent;
+          oldScript.parentNode.replaceChild(newScript, oldScript);
+          resolve(); // Executes synchronously, so we can resolve immediately
+        }
       });
-      if (oldScript.src) {
-        // External script
-        newScript.src = oldScript.src;
-        newScript.onload = resolve;
-        newScript.onerror = reject;
-        oldScript.parentNode.replaceChild(newScript, oldScript);
-      } else {
-        // Inline script
-        newScript.textContent = oldScript.textContent;
-        oldScript.parentNode.replaceChild(newScript, oldScript);
-        resolve(); // Executes synchronously, so we can resolve immediately
-      }
-    });
+    }
   }
 
   static processTemplate(template, data) {
@@ -145,25 +150,30 @@ class NanoTemplate {
   }
 
   static processEachBlock(template, expression, data) {
-    const array = this.getNestedValue(data, expression);
+    const dataList = this.getNestedValue(data, expression);
 
     // Split content at {{else}} tag
     const elseIndex = template.indexOf('{{else}}');
     const mainContent = elseIndex === -1 ? template : template.slice(0, elseIndex);
     const elseContent = elseIndex === -1 ? '' : template.slice(elseIndex + '{{else}}'.length);
 
-    if (Array.isArray(array) && array.length > 0) {
-      return array.map((item, index) => {
-        // Create context with item properties and @index
-        const context = {
-          '@index': index,
-          ...(item && typeof item === 'object' ? item : { value: item })
-        };
-        return this.processBlocks(mainContent, context);
-      }).join('');
+    let entries;
+    if (Array.isArray(dataList) && dataList.length > 0) {
+      entries = dataList.map((item, index) => [index, item]);
+    } else if (typeof dataList === 'object' && dataList !== null) {
+      entries = Object.entries(dataList);
     } else {
       return this.processBlocks(elseContent, data);
     }
+
+    return entries.map(([key, value], index) => {
+      const context = {
+        '@index': index,
+        '@key': key,  // For arrays, this is the index; for objects, the key
+        ...(value && typeof value === 'object' ? value : { value: value })
+      };
+      return this.processBlocks(mainContent, context);
+    }).join('');
   }
 
   static processIfBlock(template, expression, data, condition) {
