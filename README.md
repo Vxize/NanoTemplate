@@ -2,10 +2,11 @@
 
 ## JS
 
-`NanoTemplate.render(template, dataSource = null, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html')`
+`NanoTemplate.render(template, dataSource = null, fetchOption = {}, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html')`
 
 - `template`: full url starting with "http", or local file name under `viewPath`
 - `dataSource`: remote api url to get json data if it is a string, otherwise, pass it directly as tempalte data. If not set, it will just render static page of `template` without any data
+- `fetchOption`: options for `dataSource` if it is a remote api url
 - `targetElementId`: id of dom element to put the rendered content, default is `"app"`
 - `viewPath`: path of local template file, default is `"/page/"`
 - `templateExtension`: file extension for template file, default is `".html"`
