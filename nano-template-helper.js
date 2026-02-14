@@ -87,17 +87,17 @@ METHOD 3: Using NanoTemplate.registerEventListener (most control)
 <div id="myButton">Click Me</div>
 
 <script>
-  const targetElement = document.getElementById('app');
-  const button = document.getElementById('myButton');
-  
-  NanoTemplate.registerEventListener(
-    targetElement, 
-    button, 
-    'click', 
-    function() {
-      alert('Clicked!');
-    }
-  );
+  (function() {
+    // ✅ NEW API - Simple and clean!
+    NanoTemplate.registerEventListener(
+      '#myButton',    // Element selector or element object
+      'click',        // Event type
+      function() {    // Handler
+        alert('Clicked!');
+      }
+    );
+    // targetElementId defaults to 'app'
+  })();
 </script>
 
 
@@ -117,5 +117,6 @@ COMPARISON:
   - Can pass options (capture, once, etc.)
   - Better for complex interactions
   - TypeScript-friendly
+  - Auto cleanup on re-render
 
 */
