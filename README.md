@@ -184,16 +184,28 @@ Automatically cleaned up on re-render:
 
 <script>
   (function() {
-    const targetElement = document.getElementById('app');
-    const button = document.getElementById('myButton');
-    
+    // ✅ Simple and clean - targetElementId defaults to 'app'
     NanoTemplate.registerEventListener(
-      targetElement,  // Container being re-rendered
-      button,         // Element to attach to
+      '#myButton',    // Element selector or element object
       'click',        // Event type
       () => {         // Handler
         alert('Clicked!');
       }
+    );
+  })();
+</script>
+```
+
+**With custom container:**
+```html
+<script>
+  (function() {
+    NanoTemplate.registerEventListener(
+      '#sidebarBtn',
+      'click',
+      handler,
+      null,        // No options
+      'sidebar'    // Custom targetElementId
     );
   })();
 </script>
@@ -222,9 +234,11 @@ await NanoTemplateHelper.render('template', data);
 
 ---
 
-## Migration from Old API
+## Migration from v1.x
 
-### Old (v1.x)
+### API Changes
+
+**v1.x (Old):**
 ```javascript
 await NanoTemplate.render(
   'event',           // template
@@ -236,7 +250,7 @@ await NanoTemplate.render(
 );
 ```
 
-### New (v2.0)
+**v2.0 (New):**
 ```javascript
 await NanoTemplate.render(
   'event',           // template
@@ -248,6 +262,20 @@ await NanoTemplate.render(
     templateExtension: '.html'
   }
 );
+```
+
+### Event Listeners
+
+**v1.x (Old):**
+```javascript
+const targetElement = document.getElementById('app');
+const button = document.getElementById('myButton');
+NanoTemplate.registerEventListener(targetElement, button, 'click', handler);
+```
+
+**v2.0 (New):**
+```javascript
+NanoTemplate.registerEventListener('#myButton', 'click', handler);
 ```
 
 ### Simple cases (using defaults)
@@ -335,18 +363,34 @@ Output:
 
 ## Additional Methods
 
-### `NanoTemplate.registerEventListener(targetElement, element, event, handler, options)`
+### `NanoTemplate.registerEventListener(element, event, handler, options, targetElementId)`
 
 Register an event listener that will be automatically cleaned up on re-render.
 
+**Parameters:**
+- `element` (Element | string) - Element object or selector string (e.g., '#myBtn', '.button')
+- `event` (string) - Event type (e.g., 'click', 'mouseover', 'keypress')
+- `handler` (Function) - Event handler function
+- `options` (Object, optional) - Event options (e.g., `{ once: true, capture: true }`)
+- `targetElementId` (string, optional, default: `'app'`) - ID of container being re-rendered
+
+**Examples:**
+
 ```javascript
-NanoTemplate.registerEventListener(
-  document.getElementById('app'),
-  button,
-  'click',
-  handler,
-  { once: true }
-);
+// Simple - uses default targetElementId: 'app'
+NanoTemplate.registerEventListener('#myButton', 'click', () => {
+  console.log('Clicked!');
+});
+
+// With element object
+const button = document.getElementById('myButton');
+NanoTemplate.registerEventListener(button, 'click', handler);
+
+// With event options
+NanoTemplate.registerEventListener('#myButton', 'click', handler, { once: true });
+
+// Custom target container
+NanoTemplate.registerEventListener('#sidebarBtn', 'click', handler, null, 'sidebar');
 ```
 
 ### `NanoTemplate.processTemplate(template, data)`
