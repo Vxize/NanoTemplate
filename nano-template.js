@@ -472,7 +472,7 @@ class NanoTemplate {
       throw new Error('#if block requires an expression');
     }
 
-    const value = this.getNestedValue(data, expression);
+    const value = this.evaluateExpression(expression, data);
     const shouldRender = condition ? !!value : !value;
 
     // Split content at {{else}} tag
@@ -483,6 +483,90 @@ class NanoTemplate {
     } else {
       return this.processBlocks(elseContent, data, depth + 1);
     }
+  }
+
+  /**
+   * Evaluate an expression with data context
+   * Supports: variables, && (AND), || (OR), ! (NOT), == (equality), != (inequality), comparisons
+   */
+  static evaluateExpression(expression, data) {
+    // Trim whitespace
+    expression = expression.trim();
+
+    // Check for logical operators (lowest precedence)
+    // OR (||) - check first as it has lowest precedence
+    if (expression.includes('||')) {
+      const parts = expression.split('||').map(p => p.trim());
+      return parts.some(part => this.evaluateExpression(part, data));
+    }
+
+    // AND (&&)
+    if (expression.includes('&&')) {
+      const parts = expression.split('&&').map(p => p.trim());
+      return parts.every(part => this.evaluateExpression(part, data));
+    }
+
+    // Check for comparison operators
+    // Equality (==)
+    if (expression.includes('==')) {
+      const [left, right] = expression.split('==').map(p => p.trim());
+      return this.evaluateExpression(left, data) == this.evaluateExpression(right, data);
+    }
+
+    // Inequality (!=)
+    if (expression.includes('!=')) {
+      const [left, right] = expression.split('!=').map(p => p.trim());
+      return this.evaluateExpression(left, data) != this.evaluateExpression(right, data);
+    }
+
+    // Greater than or equal (>=)
+    if (expression.includes('>=')) {
+      const [left, right] = expression.split('>=').map(p => p.trim());
+      return this.evaluateExpression(left, data) >= this.evaluateExpression(right, data);
+    }
+
+    // Less than or equal (<=)
+    if (expression.includes('<=')) {
+      const [left, right] = expression.split('<=').map(p => p.trim());
+      return this.evaluateExpression(left, data) <= this.evaluateExpression(right, data);
+    }
+
+    // Greater than (>)
+    if (expression.includes('>')) {
+      const [left, right] = expression.split('>').map(p => p.trim());
+      return this.evaluateExpression(left, data) > this.evaluateExpression(right, data);
+    }
+
+    // Less than (<)
+    if (expression.includes('<')) {
+      const [left, right] = expression.split('<').map(p => p.trim());
+      return this.evaluateExpression(left, data) < this.evaluateExpression(right, data);
+    }
+
+    // NOT (!)
+    if (expression.startsWith('!')) {
+      return !this.evaluateExpression(expression.slice(1).trim(), data);
+    }
+
+    // String literal (single or double quotes)
+    if ((expression.startsWith('"') && expression.endsWith('"')) ||
+      (expression.startsWith("'") && expression.endsWith("'"))) {
+      return expression.slice(1, -1);
+    }
+
+    // Number literal
+    if (/^-?\d+(\.\d+)?$/.test(expression)) {
+      return parseFloat(expression);
+    }
+
+    // Boolean literals
+    if (expression === 'true') return true;
+    if (expression === 'false') return false;
+    if (expression === 'null') return null;
+    if (expression === 'undefined') return undefined;
+
+    // Variable lookup
+    return this.getNestedValue(data, expression);
   }
 
   /**
