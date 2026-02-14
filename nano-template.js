@@ -168,13 +168,36 @@ class NanoTemplate {
 
   /**
    * Register an event listener for tracking and cleanup
+   * @param {Element|string} element - Element or selector string to attach listener to
+   * @param {string} event - Event type ('click', 'mouseover', etc.)
+   * @param {Function} handler - Event handler function
+   * @param {Object} options - Optional event options ({ once: true, capture: true, etc. })
+   * @param {string} targetElementId - ID of container being re-rendered (default: 'app')
    */
-  static registerEventListener(targetElement, element, event, handler, options) {
+  static registerEventListener(element, event, handler, options = null, targetElementId = 'app') {
+    const targetElement = document.getElementById(targetElementId);
+
+    if (!targetElement) {
+      console.error(`[NanoTemplate] Target element #${targetElementId} not found`);
+      return;
+    }
+
+    // Support both element objects and selector strings
+    const el = typeof element === 'string'
+      ? (document.getElementById(element) || document.querySelector(element))
+      : element;
+
+    if (!el) {
+      console.error('[NanoTemplate] Element to attach listener not found:', element);
+      return;
+    }
+
     if (!this._eventListeners.has(targetElement)) {
       this._eventListeners.set(targetElement, []);
     }
-    this._eventListeners.get(targetElement).push({ element, event, handler, options });
-    element.addEventListener(event, handler, options);
+
+    this._eventListeners.get(targetElement).push({ element: el, event, handler, options });
+    el.addEventListener(event, handler, options);
   }
 
   static executeScript(oldScript, debug = false) {
