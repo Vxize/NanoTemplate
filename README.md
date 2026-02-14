@@ -201,7 +201,7 @@ Automatically cleaned up on re-render:
 
 ### Method 2: Event Delegation (Simplest)
 
-Using `NanoTemplateHelper`:
+Using `NanoTemplate`:
 
 ```html
 <button data-onclick="alert('Hello!')">Click Me</button>
@@ -217,7 +217,7 @@ Using `NanoTemplateHelper`:
 
 Then use:
 ```javascript
-await NanoTemplateHelper.render('template', data);
+await NanoTemplate.render('template', data);
 ```
 
 ---
