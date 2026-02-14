@@ -3,7 +3,16 @@ class NanoTemplate {
   static _loadedScripts = new WeakMap();
   static _eventListeners = new WeakMap();
 
-  static async render(template, dataSource = null, fetchOption = {}, targetElementId = 'app', viewPath = '/page/', templateExtension = '.html') {
+  static async render(template, dataSource = null, fetchOption = {}, options = {}) {
+    // Default options
+    const {
+      targetElementId = 'app',
+      viewPath = '/page/',
+      templateExtension = '.html',
+      skipScripts = false,
+      debug = false
+    } = options;
+
     const targetElement = document.getElementById(targetElementId);
 
     // Validate target element exists
@@ -28,7 +37,11 @@ class NanoTemplate {
       // If no data source, render static template
       if (!dataSource) {
         targetElement.innerHTML = templateContent;
-        await this.loadScript(targetElement);
+
+        // Skip script execution if requested
+        if (!skipScripts) {
+          await this.loadScript(targetElement, debug);
+        }
         return;
       }
 
@@ -47,28 +60,65 @@ class NanoTemplate {
       // Process and render template
       const processed = this.processTemplate(templateContent, data);
       targetElement.innerHTML = processed;
-      await this.loadScript(targetElement);
+
+      // Skip script execution if requested
+      if (!skipScripts) {
+        await this.loadScript(targetElement, debug);
+      }
 
     } catch (error) {
       console.error('Template rendering failed:', error);
+      console.error('Full error:', error.stack);
       targetElement.innerHTML = `<p>Error loading content: ${this.escapeHtml(error.message)}</p>`;
     }
   }
 
-  static async loadScript(targetElement) {
+  static async loadScript(targetElement, debug = false) {
     const scripts = targetElement.querySelectorAll('script');
     const loadedScripts = this._loadedScripts.get(targetElement) || new Set();
 
-    for (const oldScript of scripts) {
+    if (scripts.length === 0) {
+      // No scripts found - this is normal for static HTML
+      return;
+    }
+
+    if (debug) {
+      console.log(`[NanoTemplate] Found ${scripts.length} script element(s)`);
+    }
+
+    for (let i = 0; i < scripts.length; i++) {
+      const oldScript = scripts[i];
       const scriptId = this._getScriptIdentifier(oldScript);
+
+      // Debug log each script
+      if (debug) {
+        console.log(`[NanoTemplate] Processing script ${i + 1}/${scripts.length}:`, {
+          src: oldScript.src || '(inline)',
+          textLength: (oldScript.textContent || '').length,
+          outerHTML: oldScript.outerHTML.substring(0, 100) + '...'
+        });
+      }
 
       // Skip if already loaded (for external scripts)
       if (oldScript.src && loadedScripts.has(scriptId)) {
-        console.log(`Script already loaded: ${scriptId}`);
+        if (debug) {
+          console.log(`[NanoTemplate] Script already loaded: ${scriptId}`);
+        }
         continue;
       }
 
-      await this.executeScript(oldScript);
+      try {
+        await this.executeScript(oldScript, debug);
+      } catch (error) {
+        // Add more context to the error
+        const scriptPreview = oldScript.src
+          ? `External: ${oldScript.src}`
+          : `Inline (${oldScript.textContent.length} chars): ${oldScript.textContent.substring(0, 200)}...`;
+
+        console.error('[NanoTemplate] Failed to execute script:', scriptPreview);
+        console.error('[NanoTemplate] Script outerHTML:', oldScript.outerHTML);
+        throw new Error(`Script execution failed: ${error.message}\nScript: ${scriptPreview}`);
+      }
 
       if (oldScript.src) {
         loadedScripts.add(scriptId);
@@ -127,7 +177,7 @@ class NanoTemplate {
     element.addEventListener(event, handler, options);
   }
 
-  static executeScript(oldScript) {
+  static executeScript(oldScript, debug = false) {
     if (!oldScript) {
       return Promise.resolve();
     }
@@ -146,40 +196,39 @@ class NanoTemplate {
           newScript.src = oldScript.src;
           newScript.onload = resolve;
           newScript.onerror = (error) => {
-            console.error(`Failed to load script: ${oldScript.src}`, error);
+            if (debug) {
+              console.error(`[NanoTemplate] Failed to load external script: ${oldScript.src}`, error);
+            }
             reject(new Error(`Script load failed: ${oldScript.src}`));
           };
 
           if (oldScript.parentNode) {
             oldScript.parentNode.replaceChild(newScript, oldScript);
           } else {
-            console.error('Script has no parent node');
+            if (debug) {
+              console.error('[NanoTemplate] Script has no parent node');
+            }
             reject(new Error('Script has no parent node'));
           }
         } else {
-          // Inline script - validate before executing
+          // Inline script
           const scriptContent = oldScript.textContent || oldScript.text || '';
 
-          // Check for common syntax errors
+          // Check for empty scripts
           if (!scriptContent.trim()) {
-            // Empty script, just resolve
+            // Empty script - just remove it and resolve
+            if (debug) {
+              console.log('[NanoTemplate] Removing empty script tag');
+            }
+            if (oldScript.parentNode) {
+              oldScript.parentNode.removeChild(oldScript);
+            }
             resolve();
             return;
           }
 
-          // Check for unclosed tags that might cause issues
-          if (this._hasUnclosesTags(scriptContent)) {
-            console.warn('Warning: Script may contain unclosed HTML tags:', scriptContent.substring(0, 100));
-          }
-
-          // Validate syntax by attempting to create a function
-          try {
-            new Function(scriptContent);
-          } catch (syntaxError) {
-            console.error('Syntax error in inline script:', syntaxError);
-            console.error('Script content:', scriptContent);
-            reject(new Error(`Syntax error in inline script: ${syntaxError.message}`));
-            return;
+          if (debug) {
+            console.log(`[NanoTemplate] Executing inline script (${scriptContent.length} chars)`);
           }
 
           newScript.textContent = scriptContent;
@@ -187,32 +236,29 @@ class NanoTemplate {
           if (oldScript.parentNode) {
             try {
               oldScript.parentNode.replaceChild(newScript, oldScript);
+              // Give it a moment to execute
               setTimeout(resolve, 0);
             } catch (replaceError) {
-              console.error('Error replacing script node:', replaceError);
-              console.error('Script content:', scriptContent);
+              if (debug) {
+                console.error('[NanoTemplate] Error replacing script node:', replaceError);
+                console.error('[NanoTemplate] Script content:', scriptContent.substring(0, 200));
+              }
               reject(replaceError);
             }
           } else {
-            console.error('Script has no parent node');
+            if (debug) {
+              console.error('[NanoTemplate] Script has no parent node');
+            }
             reject(new Error('Script has no parent node'));
           }
         }
       } catch (error) {
-        console.error('Error in executeScript:', error);
+        if (debug) {
+          console.error('[NanoTemplate] Error in executeScript:', error);
+        }
         reject(error);
       }
     });
-  }
-
-  /**
-   * Check if script content has unclosed HTML-like tags that might cause issues
-   */
-  static _hasUnclosesTags(content) {
-    // Simple check for common problematic patterns
-    const openScriptTags = (content.match(/<script/gi) || []).length;
-    const closeScriptTags = (content.match(/<\/script>/gi) || []).length;
-    return openScriptTags !== closeScriptTags;
   }
 
   static processTemplate(template, data) {
