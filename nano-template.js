@@ -11,6 +11,7 @@ class NanoTemplate {
       templateExtension = '.html',
       skipScripts = false,
       debug = false,
+      timeout = 0,  // Timeout in milliseconds (0 = no timeout)
       onBeforeRender = null,
       onDataLoading = null,
       onDataLoaded = null
@@ -69,17 +70,62 @@ class NanoTemplate {
 
         if (debug) {
           console.log(`[NanoTemplate] Fetching data from: ${dataSource}`);
+          if (timeout > 0) {
+            console.log(`[NanoTemplate] Timeout set to: ${timeout}ms`);
+          }
         }
 
-        const apiResponse = await fetch(dataSource, fetchOption);
-        if (!apiResponse.ok) {
-          throw new Error(`Error loading data: ${apiResponse.status} ${apiResponse.statusText}`);
-        }
-        data = await apiResponse.json();
+        // Setup timeout with AbortController if timeout is specified
+        let abortController = null;
+        let timeoutId = null;
 
-        if (debug) {
-          console.log('[NanoTemplate] Data fetched successfully:');
-          console.log(data);
+        if (timeout > 0) {
+          abortController = new AbortController();
+          timeoutId = setTimeout(() => {
+            abortController.abort();
+          }, timeout);
+
+          // Add signal to fetchOption
+          fetchOption = { ...fetchOption, signal: abortController.signal };
+        }
+
+        try {
+          const apiResponse = await fetch(dataSource, fetchOption);
+
+          // Clear timeout if request completed
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
+          if (!apiResponse.ok) {
+            throw new Error(`Error loading data: ${apiResponse.status} ${apiResponse.statusText}`);
+          }
+          data = await apiResponse.json();
+
+          if (debug) {
+            console.log('[NanoTemplate] Data fetched successfully:');
+            console.log(data);
+          }
+        } catch (fetchError) {
+          // Clear timeout on error
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
+          // Check if error is due to abort (timeout)
+          if (fetchError.name === 'AbortError') {
+            const timeoutError = new Error(`Request timeout: Failed to fetch data within ${timeout}ms`);
+            timeoutError.isTimeout = true;
+
+            if (debug) {
+              console.error('[NanoTemplate] Request timed out');
+            }
+
+            throw timeoutError;
+          }
+
+          // Re-throw other fetch errors
+          throw fetchError;
         }
 
         // Call onDataLoaded callback after fetching
@@ -113,10 +159,18 @@ class NanoTemplate {
 
       // Call onDataLoaded even on error (to hide loading indicator)
       if (typeof dataSource === 'string' && typeof onDataLoaded === 'function') {
+        if (debug) {
+          console.log('[NanoTemplate] Calling onDataLoaded callback with error');
+        }
         onDataLoaded(null, error, targetElement);
       }
 
-      targetElement.innerHTML = `<p>Error loading content: ${this.escapeHtml(error.message)}</p>`;
+      // Show appropriate error message
+      const errorMessage = error.isTimeout
+        ? `Request timed out: ${error.message}`
+        : `Error loading content: ${error.message}`;
+
+      targetElement.innerHTML = `<p class="error">${this.escapeHtml(errorMessage)}</p>`;
     }
   }
 
