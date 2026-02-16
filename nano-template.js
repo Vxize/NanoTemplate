@@ -10,7 +10,10 @@ class NanoTemplate {
       viewPath = '/page/',
       templateExtension = '.html',
       skipScripts = false,
-      debug = false
+      debug = false,
+      onBeforeRender = null,
+      onDataLoading = null,
+      onDataLoaded = null
     } = options;
 
     const targetElement = document.getElementById(targetElementId);
@@ -19,6 +22,14 @@ class NanoTemplate {
     if (!targetElement) {
       console.error(`Target element with id "${targetElementId}" not found`);
       return;
+    }
+
+    // Call onBeforeRender callback FIRST (before fetching anything)
+    if (typeof onBeforeRender === 'function') {
+      if (debug) {
+        console.log('[NanoTemplate] Calling onBeforeRender callback');
+      }
+      onBeforeRender(targetElement);
     }
 
     // Clean up previous event listeners for this element
@@ -48,13 +59,43 @@ class NanoTemplate {
       // Load data
       let data;
       if (typeof dataSource === 'string') {
+        // Call onDataLoading callback before fetching
+        if (typeof onDataLoading === 'function') {
+          if (debug) {
+            console.log('[NanoTemplate] Calling onDataLoading callback');
+          }
+          onDataLoading(targetElement);
+        }
+
+        if (debug) {
+          console.log(`[NanoTemplate] Fetching data from: ${dataSource}`);
+        }
+
         const apiResponse = await fetch(dataSource, fetchOption);
         if (!apiResponse.ok) {
           throw new Error(`Error loading data: ${apiResponse.status} ${apiResponse.statusText}`);
         }
         data = await apiResponse.json();
+
+        if (debug) {
+          console.log('[NanoTemplate] Data fetched successfully:');
+          console.log(data);
+        }
+
+        // Call onDataLoaded callback after fetching
+        if (typeof onDataLoaded === 'function') {
+          if (debug) {
+            console.log('[NanoTemplate] Calling onDataLoaded callback');
+          }
+          onDataLoaded(data, null, targetElement);
+        }
       } else {
         data = dataSource;
+
+        if (debug) {
+          console.log('[NanoTemplate] Using provided data object:');
+          console.log(data);
+        }
       }
 
       // Process and render template
@@ -69,6 +110,12 @@ class NanoTemplate {
     } catch (error) {
       console.error('Template rendering failed:', error);
       console.error('Full error:', error.stack);
+
+      // Call onDataLoaded even on error (to hide loading indicator)
+      if (typeof dataSource === 'string' && typeof onDataLoaded === 'function') {
+        onDataLoaded(null, error, targetElement);
+      }
+
       targetElement.innerHTML = `<p>Error loading content: ${this.escapeHtml(error.message)}</p>`;
     }
   }
