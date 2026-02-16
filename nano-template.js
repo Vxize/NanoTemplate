@@ -158,19 +158,24 @@ class NanoTemplate {
       console.error('Full error:', error.stack);
 
       // Call onDataLoaded even on error (to hide loading indicator)
+      let callbackHandledError = false;
       if (typeof dataSource === 'string' && typeof onDataLoaded === 'function') {
         if (debug) {
           console.log('[NanoTemplate] Calling onDataLoaded callback with error');
         }
         onDataLoaded(null, error, targetElement);
+        callbackHandledError = true;
       }
 
-      // Show appropriate error message
-      const errorMessage = error.isTimeout
-        ? `Request timed out: ${error.message}`
-        : `Error loading content: ${error.message}`;
+      // Only show default error message if callback didn't handle it
+      // (or if there's no callback)
+      if (!callbackHandledError) {
+        const errorMessage = error.isTimeout
+          ? `Request timed out: ${error.message}`
+          : `Error loading content: ${error.message}`;
 
-      targetElement.innerHTML = `<p class="error">${this.escapeHtml(errorMessage)}</p>`;
+        targetElement.innerHTML = `<p class="error">${this.escapeHtml(errorMessage)}</p>`;
+      }
     }
   }
 
